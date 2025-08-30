@@ -1,0 +1,61 @@
+name: Deploy Nexus to GKE
+
+on:
+  push:
+    branches: [ master ]    # Will run on any push to master branch
+  pull_request:
+    branches: [ master ]    # Will run on any push to master branch
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}  # Use GitHub secret
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}   # Use GitHub secret
+  GKE_CLUSTER: nexus-cluster
+  GKE_ZONE: asia-southeast1-a
+  IMAGE: nexus-gcs
+  K8S_NAMESPACE: test-environment-namespace
+
+
+jobs:
+  setup-build-publish-deploy:
+    name: Setup, Build, Publish, and Deploy
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}    # Use GitHub secret
+        project_id: $PROJECT_ID                           # Use GitHub secret
+
+    # Authenticate to Docker Hub
+    - name: Login to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: $DOCKER_USERNAME
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+    - name: Build Docker image
+      run: docker build -t $DOCKER_USERNAME/$IMAGE:$GITHUB_SHA .
+
+    - name: Push Docker image
+      run: docker push $DOCKER_USERNAME/$IMAGE:$GITHUB_SHA
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.10.0'
+
+    - name: Get GKE credentials
+      run: gcloud container clusters get-credentials $GKE_CLUSTER --zone $GKE_ZONE --project $PROJECT_ID
+
+    - name: Deploy to GKE
+      run: |
+        helm upgrade --install nexus ./k8s \
+          --namespace $K8S_NAMESPACE \
+          --create-namespace \
+          --set nexus.image.repository=$DOCKER_USERNAME/$IMAGE \
+          --set nexus.image.tag=$GITHUB_SHA \
+          --set gcp.projectId=$PROJECT_ID
