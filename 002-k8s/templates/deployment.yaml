@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    app: {{ .Chart.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Chart.Name }}
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8081
+        env:
+        - name: INSTALL4J_ADD_VM_PARAMS
+          value: "-Dnexus.datastore.enabled=true -Dnexus-blobstore.google-cloud.config-file=/nexus-data/gcs-key.json -Dnexus.scripts.allowCreation=true"
+        volumeMounts:
+        - name: nexus-data
+          mountPath: /nexus-data
+        - name: gcs-key
+          mountPath: /nexus-data/gcs-key.json # Mount the secret key directly to the path Nexus expects
+          subPath: {{ .Values.nexus.gcsServiceAccount.secretKey }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: nexus-data
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-pvc
+      - name: gcs-key
+        secret:
+          secretName: {{ .Values.nexus.gcsServiceAccount.secretName }}

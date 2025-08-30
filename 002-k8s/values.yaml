@@ -1,0 +1,31 @@
+replicaCount: 1
+
+image:
+  repository: your-docker-repo/nexus3-gcs # This will be your custom built image
+  tag: "3.82.1-alpine"
+  pullPolicy: IfNotPresent
+
+service:
+  type: LoadBalancer # Creates an external GCP Load Balancer to access Nexus UI
+  port: 80
+  targetPort: 8081 # Default Nexus port
+
+persistence:
+  enabled: true
+  accessMode: ReadWriteOnce
+  storageSize: 10Gi
+  storageClass: ""
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+nexus:
+  gcsBucketName: "gcs-bucket-name"
+  gcsServiceAccount:    # Get the values from k8s secret
+    secretName: "nexus-gcs-sa"      # Secret containing GCS service account
+    secretKey: "service-account.json" # Key inside the Secret
